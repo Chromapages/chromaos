@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createTaskDocument } from '@/lib/crm/firestore-rest';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
 const API_KEY = 'acb66b54c1b0db79aabc64a9c8e5c9652763a62efea7c246ca96d006b0e28344';
 
@@ -16,16 +17,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'title and dueDate required' }, { status: 400 });
     }
 
-    const taskId = await createTaskDocument({
-      leadId,
-      companyId,
+    const taskData: Record<string, any> = {
       title,
-      description,
-      dueDate: new Date(dueDate),
+      dueDate: Timestamp.fromDate(new Date(dueDate)),
       priority: priority || 'medium',
-    });
+      status: 'open',
+      createdAt: Timestamp.now(),
+    };
+    if (description) taskData.description = description;
+    if (leadId) taskData.leadId = leadId;
+    if (companyId) taskData.companyId = companyId;
 
-    return NextResponse.json({ success: true, taskId });
+    const docRef = await addDoc(collection(db, 'tasks'), taskData);
+    return NextResponse.json({ success: true, taskId: docRef.id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
