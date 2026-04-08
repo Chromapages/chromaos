@@ -1,26 +1,33 @@
 import * as admin from 'firebase-admin';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
 
 function initFirebaseAdmin() {
   if (admin.apps.length) return;
 
-  const credsJson = process.env.FIREBASE_ADMIN_CREDENTIALS;
-
-  // If credentials are passed as a JSON string, write to a temp file
-  // Firebase Admin SDK reads GOOGLE_APPLICATION_CREDENTIALS on first use
-  if (credsJson) {
-    const tempCredPath = join('/tmp', 'firebase-sa.json');
-    writeFileSync(tempCredPath, credsJson, 'utf-8');
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = tempCredPath;
+  // On Vercel (Google Cloud infra): use Application Default Credentials
+  // The metadata service provides credentials automatically — no file needed.
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    admin.initializeApp({
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    });
+  } else {
+    // Local dev: require explicit credentials via env var
+    const credsJson = process.env.FIREBASE_ADMIN_CREDENTIALS;
+    if (!credsJson) {
+      console.warn('[firebase-admin] FIREBASE_ADMIN_CREDENTIALS not set — Firestore Admin writes disabled');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(credsJson);
+      admin.initializeApp({
+        projectId: parsed.project_id,
+        credential: admin.credential.cert(parsed),
+      });
+    } catch (e) {
+      console.warn('[firebase-admin] Failed to parse FIREBASE_ADMIN_CREDENTIALS:', e);
+    }
   }
-
-  admin.initializeApp({
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  });
 }
 
-// Initialize on module load
 initFirebaseAdmin();
 
 const db = admin.firestore();
