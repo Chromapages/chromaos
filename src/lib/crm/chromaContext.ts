@@ -1,12 +1,9 @@
-import { db, Timestamp } from '@/lib/firebase-admin';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, collection, addDoc, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 
-// Collection paths
 const AGENTS_COL = 'agents';
 const CHROMA_DOC = 'chroma';
 const GLOBAL_DOC = '_global';
-
-const getContextPath = (threadId?: string) => 
-  `${AGENTS_COL}/${CHROMA_DOC}/${threadId ? `threads/${threadId}` : GLOBAL_DOC}/${threadId || 'state'}`;
 
 // === ALERTS ===
 
@@ -25,28 +22,29 @@ export interface ChromaAlert {
 }
 
 export async function pushAlert(alert: Omit<ChromaAlert, 'id' | 'createdAt' | 'acknowledged'>): Promise<string> {
-  const col = db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('alerts').collection('items');
+  const col = collection(db, 'agents/chroma/_global/alerts');
   const docData = {
     ...alert,
     createdAt: Timestamp.now(),
     acknowledged: false,
   };
-  const ref = await col.add(docData);
+  const ref = await addDoc(col, docData);
   return ref.id;
 }
 
 export async function getUnacknowledgedAlerts(): Promise<ChromaAlert[]> {
-  const snap = await db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('alerts').collection('items')
-    .where('acknowledged', '==', false)
-    .orderBy('createdAt', 'desc')
-    .limit(50)
-    .get();
-    
+  const q = query(
+    collection(db, 'agents/chroma/_global/alerts'),
+    where('acknowledged', '==', false),
+    orderBy('createdAt', 'desc'),
+    limit(50)
+  );
+  const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as ChromaAlert));
 }
 
 export async function acknowledgeAlert(alertId: string, acknowledgedBy: string = 'chroma'): Promise<void> {
-  await db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('alerts').collection('items').doc(alertId).update({
+  await updateDoc(doc(db, 'agents/chroma/_global/alerts', alertId), {
     acknowledged: true,
     acknowledgedAt: Timestamp.now(),
     acknowledgedBy,
@@ -68,29 +66,29 @@ export interface QueuedAction {
 }
 
 export async function queueAction(action: Omit<QueuedAction, 'id' | 'createdAt' | 'status'>): Promise<string> {
-  const col = db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('pipelineQueue').collection('items');
+  const col = collection(db, 'agents/chroma/_global/pipelineQueue');
   const docData = {
     ...action,
-    status: 'pending',
+    status: 'pending' as const,
     createdAt: Timestamp.now(),
   };
-  const ref = await col.add(docData);
+  const ref = await addDoc(col, docData);
   return ref.id;
 }
 
 export async function getPendingActions(): Promise<QueuedAction[]> {
-  const snap = await db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('pipelineQueue').collection('items')
-    .where('status', '==', 'pending')
-    .orderBy('priority', 'desc')
-    .orderBy('createdAt', 'asc')
-    .limit(20)
-    .get();
-    
+  const q = query(
+    collection(db, 'agents/chroma/_global/pipelineQueue'),
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'asc'),
+    limit(20)
+  );
+  const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as QueuedAction));
 }
 
 export async function markActionCompleted(actionId: string): Promise<void> {
-  await db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('pipelineQueue').collection('items').doc(actionId).update({
+  await updateDoc(doc(db, 'agents/chroma/_global/pipelineQueue', actionId), {
     status: 'completed',
     completedAt: Timestamp.now(),
   });
@@ -111,29 +109,30 @@ export interface ActiveProject {
 }
 
 export async function registerProject(project: Omit<ActiveProject, 'id' | 'createdAt' | 'lastActivity'>): Promise<string> {
-  const col = db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('activeProjects').collection('items');
+  const col = collection(db, 'agents/chroma/_global/activeProjects');
   const docData = {
     ...project,
     lastActivity: Timestamp.now(),
     createdAt: Timestamp.now(),
   };
-  const ref = await col.add(docData);
+  const ref = await addDoc(col, docData);
   return ref.id;
 }
 
 export async function updateProjectActivity(projectId: string, nextStep?: string): Promise<void> {
   const updates: Record<string, any> = { lastActivity: Timestamp.now() };
   if (nextStep) updates.nextStep = nextStep;
-  await db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('activeProjects').collection('items').doc(projectId).update(updates);
+  await updateDoc(doc(db, 'agents/chroma/_global/activeProjects', projectId), updates);
 }
 
 export async function getActiveProjects(): Promise<ActiveProject[]> {
-  const snap = await db.collection(AGENTS_COL).doc(CHROMA_DOC).collection(GLOBAL_DOC).doc('activeProjects').collection('items')
-    .where('status', '==', 'active')
-    .orderBy('lastActivity', 'desc')
-    .limit(20)
-    .get();
-    
+  const q = query(
+    collection(db, 'agents/chroma/_global/activeProjects'),
+    where('status', '==', 'active'),
+    orderBy('lastActivity', 'desc'),
+    limit(20)
+  );
+  const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as ActiveProject));
 }
 
