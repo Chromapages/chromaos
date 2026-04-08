@@ -1,9 +1,10 @@
 /**
  * Posts a lead creation notification to Discord via webhook.
- * Call this after saving a lead to Firestore.
+ * Format: [lead:json] — parsed by Chroma's standing order in #chroma.
  */
 
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1490948196501950514/_GYZiJ_ZaMsVwIjgG8UUI-IPIcJRxg_hwCsko8kIKEVd23ABPKaxrYAla6X7xLbGnnXt';
+const CHROMAOS_URL = process.env.CHROMAOS_URL || 'https://chromaos.vercel.app';
 
 interface LeadNotifyParams {
   leadId: string;
@@ -18,7 +19,6 @@ interface LeadNotifyParams {
   timeline?: string;
   offerInterest?: string;
   notesSummary?: string;
-  chromaosUrl?: string;
 }
 
 export async function notifyDiscordOfLead(params: LeadNotifyParams): Promise<void> {
@@ -35,7 +35,6 @@ export async function notifyDiscordOfLead(params: LeadNotifyParams): Promise<voi
     timeline,
     offerInterest,
     notesSummary,
-    chromaosUrl = `https://chromaos.vercel.app/leads/${leadId}`,
   } = params;
 
   if (!DISCORD_WEBHOOK_URL) {
@@ -43,27 +42,38 @@ export async function notifyDiscordOfLead(params: LeadNotifyParams): Promise<voi
     return;
   }
 
-  const fields = [
-    { name: 'Company', value: companyName, inline: true },
-    { name: 'Contact', value: fullName, inline: true },
-    { name: 'Trade', value: tradeOrVertical, inline: true },
-    { name: 'Source', value: source, inline: true },
-  ];
+  // Structured lead payload — Chroma parses this from [lead:...] messages
+  const leadPayload = {
+    leadId,
+    companyName,
+    fullName,
+    tradeOrVertical,
+    source,
+    email: email || null,
+    phone: phone || null,
+    website: website || null,
+    budgetRange: budgetRange || null,
+    timeline: timeline || null,
+    offerInterest: offerInterest || null,
+    notesSummary: notesSummary || null,
+    chromaosUrl: `${CHROMAOS_URL}/leads/${leadId}`,
+  };
 
-  if (email) {
-    fields.push({ name: 'Email', value: email, inline: true });
-  }
-  if (phone) {
-    fields.push({ name: 'Phone', value: phone, inline: true });
-  }
+  const triggerLine = `[lead:]\n\`\`\`json\n${JSON.stringify(leadPayload, null, 2)}\n\`\`\``;
 
   const body = {
-    content: `🆕 **New Lead Added**`,
+    content: `🆕 **New Lead** — ${companyName}\n${triggerLine}`,
     embeds: [
       {
         title: companyName,
-        url: chromaosUrl,
-        fields,
+        url: `${CHROMAOS_URL}/leads/${leadId}`,
+        fields: [
+          { name: 'Contact', value: fullName, inline: true },
+          { name: 'Trade', value: tradeOrVertical, inline: true },
+          { name: 'Source', value: source, inline: true },
+          ...(email ? [{ name: 'Email', value: email, inline: true }] : []),
+          ...(phone ? [{ name: 'Phone', value: phone, inline: true }] : []),
+        ],
         footer: { text: `Lead ID: ${leadId} · ChromaOS` },
         timestamp: new Date().toISOString(),
       },
@@ -79,29 +89,4 @@ export async function notifyDiscordOfLead(params: LeadNotifyParams): Promise<voi
   if (!res.ok) {
     console.error('Discord webhook failed:', res.status, await res.text());
   }
-
-  // Also notify Chroma directly with the full lead payload (fire-and-forget)
-  const chromaosBaseUrl = process.env.CHROMAOS_URL || 'https://chromaos.vercel.app';
-  fetch(`${chromaosBaseUrl}/api/chroma/inbound-lead`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      lead: {
-        leadId,
-        companyName,
-        fullName,
-        email,
-        phone,
-        tradeOrVertical,
-        source,
-        website,
-        budgetRange,
-        timeline,
-        offerInterest,
-        notesSummary,
-      },
-    }),
-  }).catch((err) => {
-    console.warn('Chroma inbound-lead notification failed:', err);
-  });
 }
