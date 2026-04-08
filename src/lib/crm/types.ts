@@ -17,7 +17,20 @@ export interface Lead {
   companyId?: string;
   brandId?: string;
   pipelineId?: string;
+  clientFolderPath?: string;
+  convertedAt?: any;
   createdAt?: any;
+  // Chroma classification fields
+  disposition?: 'proceed' | 'proceed_with_caution' | 'redirect' | 'disqualify';
+  nextAction?: string;
+  followUpDate?: any;
+  classificationAgent?: string;
+  classificationConfidence?: number;
+  urgencyLevel?: 'low' | 'medium' | 'high' | 'urgent';
+  packageFit?: 'starter' | 'growth' | 'os';
+  riskFlags?: string[];
+  agentSummary?: string;
+  classifiedAt?: any;
 }
 
 export interface Company {

@@ -24,6 +24,7 @@ interface Lead {
   status?: string;
   fitScore?: number;
   notesSummary?: string;
+  companyId?: string;
 }
 
 interface ClassifyResult {
@@ -59,6 +60,11 @@ export default function LeadDetailPage({ params }: { params: Promise<{ leadId: s
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+
+  // Customer conversion state
+  const [convertLoading, setConvertLoading] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const [convertSuccess, setConvertSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchLead() {
@@ -125,6 +131,31 @@ export default function LeadDetailPage({ params }: { params: Promise<{ leadId: s
     }
   }
 
+  async function handleMarkAsCustomer() {
+    setConvertLoading(true);
+    setConvertError(null);
+    setConvertSuccess(null);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/convert-customer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Conversion failed');
+      setConvertSuccess(`Customer folder created at: ${data.clientFolderPath}`);
+      // Refresh lead data
+      const docRef = doc(db, 'leads', leadId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setLead({ id: docSnap.id, ...(docSnap.data() as Omit<Lead, 'id'>) });
+      }
+    } catch (err: any) {
+      setConvertError(err.message);
+    } finally {
+      setConvertLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-black">
@@ -172,7 +203,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ leadId: s
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400 mb-4">Lead Information</h2>
           <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
             {[
-              ['Company', lead.companyName],
+              ['Company', lead.companyName, lead.companyId ? `/companies/${lead.companyId}` : null],
               ['Email', lead.email],
               ['Phone', lead.phone],
               ['Website', lead.website],
@@ -185,17 +216,68 @@ export default function LeadDetailPage({ params }: { params: Promise<{ leadId: s
               ['Notes', lead.notesSummary],
             ].map(([label, value, sub]) => {
               if (!value && !sub) return null;
+              
+              const isCompanyLink = label === 'Company' && typeof sub === 'string' && sub.startsWith('/companies');
+
               return (
                 <div key={label} className="flex flex-col gap-0.5">
                   <dt className="text-xs font-medium text-zinc-400">{label}</dt>
                   <dd className="text-sm text-black dark:text-zinc-100">
-                    {value ?? '—'}
-                    {sub ? <span className="text-zinc-400"> ({sub})</span> : null}
+                    {isCompanyLink ? (
+                      <a href={sub as string} className="text-primary hover:underline font-medium inline-flex items-center gap-1">
+                        {value as string}
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    ) : (
+                      <>
+                        {value ?? '—'}
+                        {typeof sub === 'string' && !sub.startsWith('/') ? <span className="text-zinc-400"> ({sub})</span> : null}
+                      </>
+                    )}
                   </dd>
                 </div>
               );
             })}
           </dl>
+        </section>
+
+        {/* Customer Conversion */}
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400 mb-4">Customer Status</h2>
+          {lead.status === 'customer' ? (
+            <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-sm font-medium">Customer</span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleMarkAsCustomer}
+                disabled={convertLoading}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+              >
+                {convertLoading ? (
+                  <>
+                    <LoadingSpinner />
+                    Converting…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Mark as Customer
+                  </>
+                )}
+              </button>
+              {convertError && <p className="text-sm text-red-600 dark:text-red-400">{convertError}</p>}
+              {convertSuccess && <p className="text-sm text-green-600 dark:text-green-400">{convertSuccess}</p>}
+            </div>
+          )}
         </section>
 
         {/* AI Actions */}

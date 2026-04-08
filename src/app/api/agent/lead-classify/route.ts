@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { db, Timestamp } from '@/lib/firebase-admin';
 import { getLeadContext } from '@/lib/crm/getLeadContext';
 import { saveAgentRun } from '@/lib/crm/saveAgentRun';
 import { logActivity } from '@/lib/crm/logActivity';
@@ -80,6 +81,22 @@ Return a JSON object with exactly these fields:
       output: agentOutput,
       metadata: { leadStatus: lead.status, source: lead.source },
     });
+
+    // 5. Update the Lead document with classification results
+    if (agentOutput && !agentOutput.error) {
+      await db.collection('leads').doc(leadId).update({
+        disposition: agentOutput.disposition || 'proceed',
+        packageFit: agentOutput.packageFit || 'starter',
+        fitScore: agentOutput.fitScore || 5,
+        urgencyLevel: agentOutput.urgencyLevel || 'medium',
+        nextAction: agentOutput.nextAction || 'Follow up required',
+        agentSummary: agentOutput.summary || '',
+        riskFlags: agentOutput.riskFlags || [],
+        classificationAgent: 'Chroma',
+        classificationConfidence: agentOutput.confidence || 0.85,
+        classifiedAt: Timestamp.now(),
+      });
+    }
 
     // Log to activities
     const summaryText = agentOutput.summary || `Lead classified as ${agentOutput.disposition} (fit: ${agentOutput.fitScore}/10)`;

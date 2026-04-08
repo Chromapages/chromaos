@@ -13,6 +13,11 @@ interface LeadNotifyParams {
   source?: string;
   email?: string;
   phone?: string;
+  website?: string;
+  budgetRange?: string;
+  timeline?: string;
+  offerInterest?: string;
+  notesSummary?: string;
   chromaosUrl?: string;
 }
 
@@ -25,6 +30,11 @@ export async function notifyDiscordOfLead(params: LeadNotifyParams): Promise<voi
     source = 'N/A',
     email,
     phone,
+    website,
+    budgetRange,
+    timeline,
+    offerInterest,
+    notesSummary,
     chromaosUrl = `https://chromaos.vercel.app/leads/${leadId}`,
   } = params;
 
@@ -69,4 +79,29 @@ export async function notifyDiscordOfLead(params: LeadNotifyParams): Promise<voi
   if (!res.ok) {
     console.error('Discord webhook failed:', res.status, await res.text());
   }
+
+  // Also notify Chroma directly with the full lead payload (fire-and-forget)
+  const chromaosBaseUrl = process.env.CHROMAOS_URL || 'https://chromaos.vercel.app';
+  fetch(`${chromaosBaseUrl}/api/chroma/inbound-lead`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lead: {
+        leadId,
+        companyName,
+        fullName,
+        email,
+        phone,
+        tradeOrVertical,
+        source,
+        website,
+        budgetRange,
+        timeline,
+        offerInterest,
+        notesSummary,
+      },
+    }),
+  }).catch((err) => {
+    console.warn('Chroma inbound-lead notification failed:', err);
+  });
 }
