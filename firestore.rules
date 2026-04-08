@@ -1,33 +1,50 @@
-rules_version='2'
+rules_version='2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 5, 7);
+    // Helper: check for internal API key
+    function isInternalAgent() {
+      return request.headers['x-api-key'] == 'acb66b54c1b0db79aabc64a9c8e5c9652763a62efea7c246ca96d006b0e28344';
     }
 
-    // === AGENTS / CHROMA SHARED CONTEXT ===
-    // Collections under agents/chroma/_global/ used for cross-agent state sharing
-    match /agents/chroma/{subpath}/alerts/{alertId} {
-      allow read, write: if request.time < timestamp.date(2026, 5, 7);
+    // Leads — readable by internal agents, writable only by internal agents
+    match /leads/{leadId} {
+      allow read: if true;
+      allow write: if isInternalAgent();
     }
-    match /agents/chroma/{subpath}/pipelineQueue/{actionId} {
-      allow read, write: if request.time < timestamp.date(2026, 5, 7);
+
+    // Companies
+    match /companies/{companyId} {
+      allow read: if true;
+      allow write: if isInternalAgent();
     }
-    match /agents/chroma/{subpath}/activeProjects/{projectId} {
-      allow read, write: if request.time < timestamp.date(2026, 5, 7);
+
+    // Deals
+    match /deals/{dealId} {
+      allow read: if true;
+      allow write: if isInternalAgent();
     }
-    match /agents/chroma/{subpath}/{rest=**} {
-      allow read, write: if request.time < timestamp.date(2026, 5, 7);
+
+    // Tasks
+    match /tasks/{taskId} {
+      allow read: if true;
+      allow write: if isInternalAgent();
+    }
+
+    // Activities
+    match /activities/{activityId} {
+      allow read: if true;
+      allow write: if isInternalAgent();
+    }
+
+    // Chroma shared context — full access to internal agents
+    match /agents/chroma/{document=**} {
+      allow read, write: if isInternalAgent();
+    }
+
+    // Agent runs
+    match /agentRuns/{runId} {
+      allow read, write: if true;
     }
   }
 }
