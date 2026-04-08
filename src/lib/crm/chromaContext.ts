@@ -18,7 +18,7 @@ export interface ChromaAlert {
 }
 
 export async function pushAlert(alert: Omit<ChromaAlert, 'id' | 'createdAt' | 'acknowledged'>): Promise<string> {
-  const col = collection(db, 'agents/chroma/_global/alerts');
+  const col = collection(db, 'agents/chroma/alerts');
   const docData = {
     ...alert,
     createdAt: Timestamp.now(),
@@ -31,7 +31,7 @@ export async function pushAlert(alert: Omit<ChromaAlert, 'id' | 'createdAt' | 'a
 export async function getUnacknowledgedAlerts(): Promise<ChromaAlert[]> {
   // Simple query — no composite index needed
   const q = query(
-    collection(db, 'agents/chroma/_global/alerts'),
+    collection(db, 'agents/chroma/alerts'),
     where('acknowledged', '==', false),
     limit(50)
   );
@@ -46,7 +46,7 @@ export async function getUnacknowledgedAlerts(): Promise<ChromaAlert[]> {
 }
 
 export async function acknowledgeAlert(alertId: string, acknowledgedBy: string = 'chroma'): Promise<void> {
-  await updateDoc(doc(db, 'agents/chroma/_global/alerts', alertId), {
+  await updateDoc(doc(db, 'agents/chroma/alerts', alertId), {
     acknowledged: true,
     acknowledgedAt: Timestamp.now(),
     acknowledgedBy,
@@ -68,7 +68,7 @@ export interface QueuedAction {
 }
 
 export async function queueAction(action: Omit<QueuedAction, 'id' | 'createdAt' | 'status'>): Promise<string> {
-  const col = collection(db, 'agents/chroma/_global/pipelineQueue');
+  const col = collection(db, 'agents/chroma/pipelineQueue');
   const docData = {
     ...action,
     status: 'pending' as const,
@@ -80,7 +80,7 @@ export async function queueAction(action: Omit<QueuedAction, 'id' | 'createdAt' 
 
 export async function getPendingActions(): Promise<QueuedAction[]> {
   const q = query(
-    collection(db, 'agents/chroma/_global/pipelineQueue'),
+    collection(db, 'agents/chroma/pipelineQueue'),
     where('status', '==', 'pending'),
     limit(20)
   );
@@ -119,7 +119,7 @@ export interface ActiveProject {
 }
 
 export async function registerProject(project: Omit<ActiveProject, 'id' | 'createdAt' | 'lastActivity'>): Promise<string> {
-  const col = collection(db, 'agents/chroma/_global/activeProjects');
+  const col = collection(db, 'agents/chroma/activeProjects');
   const docData = {
     ...project,
     lastActivity: Timestamp.now(),
@@ -132,12 +132,12 @@ export async function registerProject(project: Omit<ActiveProject, 'id' | 'creat
 export async function updateProjectActivity(projectId: string, nextStep?: string): Promise<void> {
   const updates: Record<string, any> = { lastActivity: Timestamp.now() };
   if (nextStep) updates.nextStep = nextStep;
-  await updateDoc(doc(db, 'agents/chroma/_global/activeProjects', projectId), updates);
+  await updateDoc(doc(db, 'agents/chroma/activeProjects', projectId), updates);
 }
 
 export async function getActiveProjects(): Promise<ActiveProject[]> {
   const q = query(
-    collection(db, 'agents/chroma/_global/activeProjects'),
+    collection(db, 'agents/chroma/activeProjects'),
     where('status', '==', 'active'),
     limit(20)
   );
