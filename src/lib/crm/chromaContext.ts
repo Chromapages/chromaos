@@ -1,9 +1,5 @@
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, collection, addDoc, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
-
-const AGENTS_COL = 'agents';
-const CHROMA_DOC = 'chroma';
-const GLOBAL_DOC = '_global';
+import { doc, updateDoc, collection, addDoc, query, where, getDocs, limit, Timestamp } from 'firebase/firestore';
 
 // === ALERTS ===
 
@@ -33,14 +29,20 @@ export async function pushAlert(alert: Omit<ChromaAlert, 'id' | 'createdAt' | 'a
 }
 
 export async function getUnacknowledgedAlerts(): Promise<ChromaAlert[]> {
+  // Simple query — no composite index needed
   const q = query(
     collection(db, 'agents/chroma/_global/alerts'),
     where('acknowledged', '==', false),
-    orderBy('createdAt', 'desc'),
     limit(50)
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as ChromaAlert));
+  const alerts = snap.docs.map(d => ({ id: d.id, ...d.data() } as ChromaAlert));
+  // Sort in JS — no index needed
+  return alerts.sort((a, b) => {
+    const aTime = a.createdAt?.toMillis?.() ?? 0;
+    const bTime = b.createdAt?.toMillis?.() ?? 0;
+    return bTime - aTime;
+  });
 }
 
 export async function acknowledgeAlert(alertId: string, acknowledgedBy: string = 'chroma'): Promise<void> {
@@ -80,11 +82,19 @@ export async function getPendingActions(): Promise<QueuedAction[]> {
   const q = query(
     collection(db, 'agents/chroma/_global/pipelineQueue'),
     where('status', '==', 'pending'),
-    orderBy('createdAt', 'asc'),
     limit(20)
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as QueuedAction));
+  const actions = snap.docs.map(d => ({ id: d.id, ...d.data() } as QueuedAction));
+  // Sort by priority then createdAt in JS — no composite index needed
+  const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+  return actions.sort((a, b) => {
+    const pDiff = (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
+    if (pDiff !== 0) return pDiff;
+    const aTime = a.createdAt?.toMillis?.() ?? 0;
+    const bTime = b.createdAt?.toMillis?.() ?? 0;
+    return aTime - bTime;
+  });
 }
 
 export async function markActionCompleted(actionId: string): Promise<void> {
@@ -129,11 +139,16 @@ export async function getActiveProjects(): Promise<ActiveProject[]> {
   const q = query(
     collection(db, 'agents/chroma/_global/activeProjects'),
     where('status', '==', 'active'),
-    orderBy('lastActivity', 'desc'),
     limit(20)
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as ActiveProject));
+  const projects = snap.docs.map(d => ({ id: d.id, ...d.data() } as ActiveProject));
+  // Sort by lastActivity in JS — no index needed
+  return projects.sort((a, b) => {
+    const aTime = a.lastActivity?.toMillis?.() ?? 0;
+    const bTime = b.lastActivity?.toMillis?.() ?? 0;
+    return bTime - aTime;
+  });
 }
 
 // === CONTEXT READ (for Chroma) ===
