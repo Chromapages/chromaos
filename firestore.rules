@@ -2,12 +2,12 @@ rules_version='2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper: check for internal API key
+    // Helper: check for internal API key (lowercase because Vercel lowercases headers)
     function isInternalAgent() {
       return request.headers['x-api-key'] == 'acb66b54c1b0db79aabc64a9c8e5c9652763a62efea7c246ca96d006b0e28344';
     }
 
-    // Leads — readable by internal agents, writable only by internal agents
+    // Leads
     match /leads/{leadId} {
       allow read: if true;
       allow write: if isInternalAgent();
@@ -37,7 +37,7 @@ service cloud.firestore {
       allow write: if isInternalAgent();
     }
 
-    // Chroma shared context — full access to internal agents
+    // Chroma shared context
     match /agents/chroma/{document=**} {
       allow read, write: if isInternalAgent();
     }
